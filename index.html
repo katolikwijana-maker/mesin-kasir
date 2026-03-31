@@ -47,6 +47,8 @@
     const Settings = (p) => <Icon {...p}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></Icon>;
     const Store = (p) => <Icon {...p}><path d="M20.92 8.96 19.33 3.4A2 2 0 0 0 17.41 2H6.59a2 2 0 0 0-1.92 1.4L3.08 8.96A2 2 0 0 0 3 10v2a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2a2 2 0 0 0-.08-1.04z"/><path d="M5 14v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/><path d="M12 14v8"/></Icon>;
     const FileText = (p) => <Icon {...p}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></Icon>;
+    const Lock = (p) => <Icon {...p}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></Icon>;
+    const LogOut = (p) => <Icon {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></Icon>;
 
     // --- DATA AWAL ---
     const INITIAL_PRODUCTS = [
@@ -88,9 +90,22 @@
       const [showPaymentModal, setShowPaymentModal] = useState(false);
       const [cashAmount, setCashAmount] = useState('');
 
+      // State Auth & PIN Login
+      const [isAuthenticated, setIsAuthenticated] = useState(false);
+      const [pinCode, setPinCode] = useState(() => localStorage.getItem('pos_pin') || '1234');
+      const [loginInput, setLoginInput] = useState('');
+      const [loginError, setLoginError] = useState('');
+
+      // State Form Ubah PIN
+      const [oldPinInput, setOldPinInput] = useState('');
+      const [newPinInput, setNewPinInput] = useState('');
+      const [confirmPinInput, setConfirmPinInput] = useState('');
+      const [pinMessage, setPinMessage] = useState({ type: '', text: '' });
+
       useEffect(() => { localStorage.setItem('pos_products', JSON.stringify(products)); }, [products]);
       useEffect(() => { localStorage.setItem('pos_sales', JSON.stringify(salesHistory)); }, [salesHistory]);
       useEffect(() => { localStorage.setItem('pos_store_info', JSON.stringify(storeInfo)); }, [storeInfo]);
+      useEffect(() => { localStorage.setItem('pos_pin', pinCode); }, [pinCode]);
 
       const getCategoryIcon = (category) => {
         switch(category?.toLowerCase()) {
@@ -404,6 +419,78 @@
         setCurrentReceipt(newSale);
       };
 
+      const handleLogin = (e) => {
+        e.preventDefault();
+        if (loginInput === pinCode) {
+          setIsAuthenticated(true);
+          setLoginError('');
+          setLoginInput('');
+        } else {
+          setLoginError('PIN salah! Silakan coba lagi.');
+        }
+      };
+
+      const handleLogout = () => {
+        if (window.confirm('Yakin ingin keluar dari sistem kasir?')) {
+          setIsAuthenticated(false);
+          setActiveTab('kasir'); // Reset tab saat login ulang
+        }
+      };
+
+      const handleChangePin = (e) => {
+        e.preventDefault();
+        if (oldPinInput !== pinCode) {
+          setPinMessage({ type: 'error', text: 'PIN Lama salah!' });
+          return;
+        }
+        if (newPinInput !== confirmPinInput) {
+          setPinMessage({ type: 'error', text: 'Konfirmasi PIN Baru tidak cocok!' });
+          return;
+        }
+        if (newPinInput.length < 4) {
+          setPinMessage({ type: 'error', text: 'PIN Baru harus minimal 4 karakter!' });
+          return;
+        }
+        setPinCode(newPinInput);
+        setPinMessage({ type: 'success', text: 'PIN berhasil diubah!' });
+        setOldPinInput('');
+        setNewPinInput('');
+        setConfirmPinInput('');
+        setTimeout(() => setPinMessage({ type: '', text: '' }), 3000);
+      };
+
+      // TAMPILAN HALAMAN LOGIN (Jika belum masuk)
+      if (!isAuthenticated) {
+        return (
+          <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4 font-sans">
+            <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-sm flex flex-col items-center">
+              <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-4">
+                <Store size={32} />
+              </div>
+              <h1 className="text-2xl font-bold text-gray-800 mb-2">{storeInfo.name}</h1>
+              <p className="text-gray-500 mb-8 text-center text-sm">Silakan masukkan PIN untuk masuk ke sistem.</p>
+              
+              <form onSubmit={handleLogin} className="w-full flex flex-col gap-4">
+                <div>
+                  <input 
+                    type="password" 
+                    value={loginInput} 
+                    onChange={(e) => setLoginInput(e.target.value)}
+                    placeholder="Masukkan PIN (Bawaan: 1234)" 
+                    className="w-full border border-gray-300 rounded-xl p-4 text-center text-xl tracking-widest font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                    autoFocus
+                  />
+                  {loginError && <p className="text-red-500 text-xs mt-2 text-center">{loginError}</p>}
+                </div>
+                <button type="submit" className="w-full py-3.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 flex justify-center items-center gap-2 transition-colors">
+                  <Lock size={18} /> Masuk Aplikasi
+                </button>
+              </form>
+            </div>
+          </div>
+        );
+      }
+
       return (
         <React.Fragment>
           <style>{`
@@ -428,10 +515,15 @@
                       <CheckCircle2 size={16} /><span>{printerDevice.name || 'Terhubung'}</span>
                     </div>
                   ) : (
-                    <button onClick={connectToPrinter} disabled={isConnecting || !isSupported} className="flex items-center gap-2 bg-white text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 shadow-sm">
+                    <button onClick={connectToPrinter} disabled={isConnecting || !isSupported} className="flex items-center gap-2 bg-white text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 shadow-sm hidden sm:flex">
                       <Printer size={18} />{isConnecting ? 'Menghubungkan...' : 'Hubungkan Printer'}
                     </button>
                   )}
+                  
+                  <button onClick={handleLogout} className="flex items-center gap-2 bg-red-500/20 text-red-100 hover:bg-red-500/30 px-3 py-2 rounded-lg text-sm font-semibold transition-colors border border-red-400" title="Keluar">
+                    <LogOut size={16} className="sm:hidden" />
+                    <span className="hidden sm:inline">Keluar</span>
+                  </button>
                 </div>
               </div>
             </header>
@@ -551,6 +643,93 @@
                         </tbody>
                       </table>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB REKAP */}
+              {activeTab === 'rekap' && (
+                <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col overflow-hidden w-full">
+                   <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
+                      <h2 className="font-semibold text-gray-700 text-lg">Riwayat Penjualan</h2>
+                      <div className="flex items-center gap-4">
+                        <div className="text-sm font-medium text-gray-600 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
+                          Total Pendapatan: <span className="text-green-600 font-bold ml-1">{formatRupiah(salesHistory.reduce((sum, sale) => sum + sale.total, 0))}</span>
+                        </div>
+                        {salesHistory.length > 0 && (
+                          <div className="flex items-center gap-2">
+                            <button onClick={printSalesSummaryAsPDF} className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 p-1.5 rounded-lg flex items-center gap-1 text-sm font-medium transition-colors" title="Cetak Laporan Rekap"><Printer size={18} /> Cetak Rekap</button>
+                            <button onClick={() => { if(window.confirm('Hapus semua?')) setSalesHistory([]); }} className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded-lg transition-colors" title="Hapus Semua Riwayat"><Trash2 size={18} /></button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="overflow-y-auto p-4 flex flex-col gap-4 flex-1">
+                      {salesHistory.length === 0 ? (
+                        <div className="m-auto text-center text-gray-400 py-12"><ClipboardList size={48} className="mx-auto mb-3 opacity-20" /><p>Belum ada riwayat penjualan.</p></div>
+                      ) : (
+                        salesHistory.map(sale => (
+                          <div key={sale.id} className="border border-gray-100 rounded-xl p-4 hover:shadow-md transition-shadow bg-white">
+                            <div className="flex justify-between items-center mb-3 pb-3 border-b border-gray-100">
+                              <span className="text-sm text-gray-500 font-medium">{sale.date}</span>
+                              <div className="flex items-center gap-3">
+                                <span className="font-bold text-gray-800 text-lg">{formatRupiah(sale.total)}</span>
+                                <button onClick={() => setCurrentReceipt(sale)} className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 p-1.5 rounded-lg text-sm font-medium flex gap-1"><FileText size={16} /> Detail</button>
+                              </div>
+                            </div>
+                            <div className="flex flex-col gap-2">
+                              {sale.items.map((item, idx) => (
+                                <div key={idx} className="flex justify-between text-sm items-center">
+                                  <span className="text-gray-700 flex items-center gap-2"><span className="bg-gray-100 text-gray-600 text-xs font-bold px-2 py-0.5 rounded-full">{item.quantity}x</span> {item.product.name}</span>
+                                  <span className="text-gray-500 font-medium">{formatRupiah(item.quantity * item.product.price)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                </div>
+              )}
+
+              {/* TAB PENGATURAN */}
+              {activeTab === 'pengaturan' && (
+                <div className="flex-1 flex flex-col items-center w-full">
+                  <div className="w-full max-w-xl bg-white rounded-xl shadow-sm border border-gray-100 p-6 mt-4 md:mt-10">
+                    <h2 className="font-semibold text-gray-800 mb-6 flex items-center gap-2 text-xl border-b border-gray-100 pb-4"><Store size={24} className="text-blue-600"/> Informasi Toko</h2>
+                    <div className="flex flex-col gap-5">
+                      <div><label className="block text-sm font-medium text-gray-700 mb-2">Nama Toko</label><input type="text" value={storeInfo.name} onChange={e => setStoreInfo({...storeInfo, name: e.target.value})} className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"/></div>
+                      <div><label className="block text-sm font-medium text-gray-700 mb-2">Alamat Toko</label><textarea value={storeInfo.address} onChange={e => setStoreInfo({...storeInfo, address: e.target.value})} className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none h-24"></textarea></div>
+                    </div>
+                  </div>
+
+                  <div className="w-full max-w-xl bg-white rounded-xl shadow-sm border border-gray-100 p-6 mt-6 mb-10">
+                    <h2 className="font-semibold text-gray-800 mb-6 flex items-center gap-2 text-xl border-b border-gray-100 pb-4"><Lock size={24} className="text-blue-600"/> Keamanan Akses (Ubah PIN)</h2>
+                    <form onSubmit={handleChangePin} className="flex flex-col gap-4">
+                      {pinMessage.text && (
+                        <div className={`p-3 rounded-lg text-sm font-medium border ${pinMessage.type === 'error' ? 'bg-red-50 text-red-600 border-red-200' : 'bg-green-50 text-green-600 border-green-200'}`}>
+                          {pinMessage.text}
+                        </div>
+                      )}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">PIN Lama</label>
+                        <input required type="password" value={oldPinInput} onChange={e => setOldPinInput(e.target.value)} className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono tracking-widest font-bold" placeholder="Masukkan PIN saat ini"/>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">PIN Baru</label>
+                          <input required type="password" value={newPinInput} onChange={e => setNewPinInput(e.target.value)} className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono tracking-widest font-bold" placeholder="Min. 4 karakter"/>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Konfirmasi PIN Baru</label>
+                          <input required type="password" value={confirmPinInput} onChange={e => setConfirmPinInput(e.target.value)} className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono tracking-widest font-bold" placeholder="Ketik ulang PIN baru"/>
+                        </div>
+                      </div>
+                      <button type="submit" className="mt-2 w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors">
+                        Simpan PIN Baru
+                      </button>
+                      <p className="text-xs text-gray-500 mt-1 text-center">PIN ini akan ditanyakan setiap kali Anda merefresh atau membuka kembali halaman kasir.</p>
+                    </form>
                   </div>
                 </div>
               )}
