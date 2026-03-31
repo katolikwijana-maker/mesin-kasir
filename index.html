@@ -85,6 +85,8 @@
       const [editingId, setEditingId] = useState(null);
       const [formData, setFormData] = useState({ name: '', price: '', category: 'Makanan' });
       const [currentReceipt, setCurrentReceipt] = useState(null);
+      const [showPaymentModal, setShowPaymentModal] = useState(false);
+      const [cashAmount, setCashAmount] = useState('');
 
       useEffect(() => { localStorage.setItem('pos_products', JSON.stringify(products)); }, [products]);
       useEffect(() => { localStorage.setItem('pos_sales', JSON.stringify(salesHistory)); }, [salesHistory]);
@@ -159,6 +161,7 @@
       };
 
       const total = useMemo(() => cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0), [cart]);
+      const changeAmount = Number(cashAmount) - total;
 
       // --- LOGIKA BLUETOOTH ---
       const connectToPrinter = async () => {
@@ -253,10 +256,84 @@
               `).join('')}
             </table>
             <div class="divider"></div>
-            <table><tr><td class="font-bold" style="font-size:14px;">TOTAL</td><td class="text-right font-bold" style="font-size:14px;">${formatRupiah(currentReceipt.total)}</td></tr></table>
+            <table>
+              <tr><td class="font-bold" style="font-size:14px;">TOTAL</td><td class="text-right font-bold" style="font-size:14px;">${formatRupiah(currentReceipt.total)}</td></tr>
+              <tr><td class="font-bold" style="font-size:12px;">TUNAI</td><td class="text-right" style="font-size:12px;">${formatRupiah(currentReceipt.cash || 0)}</td></tr>
+              <tr><td class="font-bold" style="font-size:12px;">KEMBALI</td><td class="text-right font-bold" style="font-size:12px;">${formatRupiah(currentReceipt.change || 0)}</td></tr>
+            </table>
             <div class="divider"></div>
             <div class="text-center" style="font-size: 10px; margin-top: 10px;">Terima Kasih</div>
             <div class="text-center" style="font-size: 10px; margin-top: 2px;">Silakan datang kembali :)</div>
+          </body></html>
+        `;
+
+        iframe.contentWindow.document.open();
+        iframe.contentWindow.document.write(html);
+        iframe.contentWindow.document.close();
+
+        setTimeout(() => {
+          try { iframe.contentWindow.focus(); iframe.contentWindow.print(); } catch (e) { window.print(); }
+          setTimeout(() => { if (document.body.contains(iframe)) document.body.removeChild(iframe); }, 1000);
+        }, 500);
+      };
+
+      const printSalesSummaryAsPDF = () => {
+        if (salesHistory.length === 0) return alert('Tidak ada data rekap untuk dicetak.');
+        
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+
+        const grandTotal = salesHistory.reduce((sum, sale) => sum + sale.total, 0);
+        const printDate = new Date().toLocaleString('id-ID');
+
+        const html = `
+          <html><head><title>Rekap_Penjualan_${storeInfo.name}</title>
+            <style>
+              @page { margin: 20mm; size: A4 portrait; }
+              body { font-family: sans-serif; color: #333; font-size: 14px; line-height: 1.5; }
+              .text-center { text-align: center; } .text-right { text-align: right; } .font-bold { font-weight: bold; }
+              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+              th, td { border: 1px solid #ddd; padding: 10px; text-align: left; vertical-align: top; }
+              th { background-color: #f8f9fa; }
+              .header { margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+              .item-list { font-size: 12px; color: #555; }
+            </style>
+          </head><body>
+            <div class="header">
+              <h1 class="text-center" style="margin:0 0 5px 0;">${storeInfo.name}</h1>
+              <p class="text-center" style="margin:0; color:#555;">${storeInfo.address}</p>
+              <h2 class="text-center" style="margin:15px 0 5px 0; font-size: 18px;">Laporan Rekap Penjualan</h2>
+              <p class="text-center" style="margin:0; font-size:12px; color:#777;">Dicetak pada: ${printDate}</p>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 5%;">No</th>
+                  <th style="width: 25%;">Waktu Transaksi</th>
+                  <th style="width: 45%;">Rincian Item</th>
+                  <th class="text-right" style="width: 25%;">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${salesHistory.map((sale, index) => `
+                  <tr>
+                    <td>${index + 1}</td>
+                    <td>${sale.date}</td>
+                    <td class="item-list">
+                      ${sale.items.map(item => `${item.quantity}x ${item.product.name}`).join('<br>')}
+                    </td>
+                    <td class="text-right font-bold">${formatRupiah(sale.total)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="3" class="text-right font-bold" style="font-size: 16px;">TOTAL PENDAPATAN</td>
+                  <td class="text-right font-bold" style="font-size: 16px; color: #16a34a;">${formatRupiah(grandTotal)}</td>
+                </tr>
+              </tfoot>
+            </table>
           </body></html>
         `;
 
@@ -291,6 +368,17 @@
           const totalLabel = "TOTAL:";
           const totalSpaces = 32 - totalLabel.length - totalStr.length;
           receiptText += `${totalLabel}${totalSpaces > 0 ? ' '.repeat(totalSpaces) : ' '}${totalStr}\n`;
+          
+          const cashStr = `${saleData.cash || 0}`;
+          const cashLabel = "TUNAI:";
+          const cashSpaces = 32 - cashLabel.length - cashStr.length;
+          receiptText += `${cashLabel}${cashSpaces > 0 ? ' '.repeat(cashSpaces) : ' '}${cashStr}\n`;
+
+          const changeStr = `${saleData.change || 0}`;
+          const changeLabel = "KEMBALI:";
+          const changeSpaces = 32 - changeLabel.length - changeStr.length;
+          receiptText += `${changeLabel}${changeSpaces > 0 ? ' '.repeat(changeSpaces) : ' '}${changeStr}\n`;
+          
           receiptText += "================================\n";
           receiptText += "          Terima Kasih         \n   Silakan datang kembali :)   \n\n\n";
 
@@ -303,9 +391,17 @@
 
       const handlePayment = () => {
         if (cart.length === 0) return alert('Keranjang kosong!');
-        const newSale = { id: Date.now(), date: new Date().toLocaleString('id-ID'), items: [...cart], total };
+        setCashAmount('');
+        setShowPaymentModal(true);
+      };
+
+      const processPayment = () => {
+        if (changeAmount < 0) return alert('Uang tunai kurang!');
+        const newSale = { id: Date.now(), date: new Date().toLocaleString('id-ID'), items: [...cart], total, cash: Number(cashAmount), change: changeAmount };
         setSalesHistory(prev => [newSale, ...prev]);
-        setCart([]); setCurrentReceipt(newSale);
+        setCart([]); 
+        setShowPaymentModal(false);
+        setCurrentReceipt(newSale);
       };
 
       return (
@@ -354,12 +450,12 @@
               </div>
             )}
 
-            <main className="flex-1 max-w-7xl mx-auto w-full p-4 flex flex-col lg:flex-row gap-6 h-full overflow-hidden">
+            <main className="flex-1 max-w-7xl mx-auto w-full p-4 flex flex-col lg:flex-row gap-6 overflow-y-auto lg:h-[calc(100vh-140px)]">
               
               {/* TAB KASIR */}
               {activeTab === 'kasir' && (
                 <React.Fragment>
-                  <div className="flex-1 flex flex-col bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                  <div className="flex-1 flex flex-col bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden min-h-[400px] lg:min-h-0">
                     <div className="p-4 border-b border-gray-100 bg-gray-50/50"><h2 className="font-semibold text-gray-700 text-lg">Daftar Produk</h2></div>
                     <div className="p-4 overflow-y-auto">
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
@@ -374,7 +470,7 @@
                     </div>
                   </div>
 
-                  <div className="w-full lg:w-[400px] bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col h-[500px] lg:h-auto">
+                  <div className="w-full lg:w-[400px] bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col h-[500px] lg:h-full shrink-0">
                     <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
                       <h2 className="font-semibold text-gray-700 text-lg flex items-center gap-2"><ShoppingCart size={20} className="text-blue-600" /> Keranjang</h2>
                       <span className="bg-blue-100 text-blue-700 py-0.5 px-2.5 rounded-full text-xs font-bold">{cart.reduce((sum, item) => sum + item.quantity, 0)} Item</span>
@@ -459,55 +555,38 @@
                 </div>
               )}
 
-              {/* TAB REKAP */}
-              {activeTab === 'rekap' && (
-                <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col overflow-hidden w-full">
-                   <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
-                      <h2 className="font-semibold text-gray-700 text-lg">Riwayat Penjualan</h2>
-                      <div className="flex items-center gap-4">
-                        <div className="text-sm font-medium text-gray-600 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
-                          Total Pendapatan: <span className="text-green-600 font-bold ml-1">{formatRupiah(salesHistory.reduce((sum, sale) => sum + sale.total, 0))}</span>
-                        </div>
-                        {salesHistory.length > 0 && <button onClick={() => { if(window.confirm('Hapus semua?')) setSalesHistory([]); }} className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded-lg" title="Hapus Semua Riwayat"><Trash2 size={18} /></button>}
+              {/* MODAL PEMBAYARAN */}
+              {showPaymentModal && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                  <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden flex flex-col">
+                    <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                      <h3 className="font-bold text-gray-800 flex items-center gap-2">Pembayaran</h3>
+                      <button onClick={() => setShowPaymentModal(false)} className="p-1 hover:bg-gray-200 rounded-full text-gray-500"><X size={20} /></button>
+                    </div>
+                    <div className="p-6 flex flex-col gap-4">
+                      <div className="flex justify-between items-center text-lg font-bold">
+                        <span className="text-gray-600">Total Tagihan</span>
+                        <span className="text-blue-600">{formatRupiah(total)}</span>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Uang Tunai (Rp)</label>
+                        <input type="number" min="0" value={cashAmount} onChange={e => setCashAmount(e.target.value)} className="w-full border border-gray-300 rounded-lg p-3 text-lg font-bold focus:ring-2 focus:ring-blue-500 outline-none" placeholder="0" autoFocus />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => setCashAmount(total)} className="py-2 border border-blue-200 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors">Uang Pas</button>
+                        <button onClick={() => setCashAmount(total > 50000 ? 100000 : 50000)} className="py-2 border border-gray-200 bg-gray-50 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">{total > 50000 ? 'Rp 100.000' : 'Rp 50.000'}</button>
+                      </div>
+                      <div className="flex justify-between items-center mt-2 pt-4 border-t border-gray-100">
+                        <span className="text-gray-600 font-medium">Kembalian</span>
+                        <span className={`text-xl font-bold ${changeAmount < 0 ? 'text-red-500' : 'text-green-600'}`}>
+                          {cashAmount === '' ? '-' : formatRupiah(changeAmount)}
+                        </span>
                       </div>
                     </div>
-                    <div className="overflow-y-auto p-4 flex flex-col gap-4 flex-1">
-                      {salesHistory.length === 0 ? (
-                        <div className="m-auto text-center text-gray-400 py-12"><ClipboardList size={48} className="mx-auto mb-3 opacity-20" /><p>Belum ada riwayat penjualan.</p></div>
-                      ) : (
-                        salesHistory.map(sale => (
-                          <div key={sale.id} className="border border-gray-100 rounded-xl p-4 hover:shadow-md transition-shadow bg-white">
-                            <div className="flex justify-between items-center mb-3 pb-3 border-b border-gray-100">
-                              <span className="text-sm text-gray-500 font-medium">{sale.date}</span>
-                              <div className="flex items-center gap-3">
-                                <span className="font-bold text-gray-800 text-lg">{formatRupiah(sale.total)}</span>
-                                <button onClick={() => setCurrentReceipt(sale)} className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 p-1.5 rounded-lg text-sm font-medium flex gap-1"><FileText size={16} /> Detail</button>
-                              </div>
-                            </div>
-                            <div className="flex flex-col gap-2">
-                              {sale.items.map((item, idx) => (
-                                <div key={idx} className="flex justify-between text-sm items-center">
-                                  <span className="text-gray-700 flex items-center gap-2"><span className="bg-gray-100 text-gray-600 text-xs font-bold px-2 py-0.5 rounded-full">{item.quantity}x</span> {item.product.name}</span>
-                                  <span className="text-gray-500 font-medium">{formatRupiah(item.quantity * item.product.price)}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                </div>
-              )}
-
-              {/* TAB PENGATURAN */}
-              {activeTab === 'pengaturan' && (
-                <div className="flex-1 flex flex-col items-center w-full">
-                  <div className="w-full max-w-xl bg-white rounded-xl shadow-sm border border-gray-100 p-6 mt-4 md:mt-10">
-                    <h2 className="font-semibold text-gray-800 mb-6 flex items-center gap-2 text-xl border-b border-gray-100 pb-4"><Store size={24} className="text-blue-600"/> Informasi Toko</h2>
-                    <div className="flex flex-col gap-5">
-                      <div><label className="block text-sm font-medium text-gray-700 mb-2">Nama Toko</label><input type="text" value={storeInfo.name} onChange={e => setStoreInfo({...storeInfo, name: e.target.value})} className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"/></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-2">Alamat Toko</label><textarea value={storeInfo.address} onChange={e => setStoreInfo({...storeInfo, address: e.target.value})} className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none h-24"></textarea></div>
-                      <div className="bg-blue-50 text-blue-800 p-4 rounded-lg text-sm flex items-start gap-3 border border-blue-100"><AlertCircle size={18} className="mt-0.5 flex-shrink-0" /><p>Perubahan akan otomatis tersimpan dan digunakan pada kop struk cetak.</p></div>
+                    <div className="p-4 bg-gray-50 border-t border-gray-100">
+                      <button onClick={processPayment} disabled={cashAmount === '' || changeAmount < 0} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors">
+                        Selesaikan Pembayaran
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -532,7 +611,9 @@
                             <div key={idx}><div className="font-bold">{item.product.name}</div><div className="flex justify-between"><span>{item.quantity} x {formatRupiah(item.product.price)}</span><span>{formatRupiah(item.quantity * item.product.price)}</span></div></div>
                           ))}
                         </div>
-                        <div className="flex justify-between font-bold text-base mb-6"><span>TOTAL</span><span>{formatRupiah(currentReceipt.total)}</span></div>
+                        <div className="flex justify-between font-bold text-base mb-1"><span>TOTAL</span><span>{formatRupiah(currentReceipt.total)}</span></div>
+                        <div className="flex justify-between text-sm mb-1"><span>TUNAI</span><span>{formatRupiah(currentReceipt.cash || 0)}</span></div>
+                        <div className="flex justify-between text-sm font-bold mb-6"><span>KEMBALI</span><span>{formatRupiah(currentReceipt.change || 0)}</span></div>
                         <div className="text-center text-xs">Terima Kasih</div><div className="text-center text-xs">Silakan datang kembali :)</div>
                       </div>
                     </div>
@@ -560,7 +641,9 @@
                   <div key={idx}><div className="font-bold">{item.product.name}</div><div className="flex justify-between"><span>{item.quantity}x {formatRupiah(item.product.price)}</span><span>{formatRupiah(item.quantity * item.product.price)}</span></div></div>
                 ))}
               </div>
-              <div className="flex justify-between font-bold text-sm mb-5"><span>TOTAL</span><span>{formatRupiah(currentReceipt.total)}</span></div>
+              <div className="flex justify-between font-bold text-sm mb-1"><span>TOTAL</span><span>{formatRupiah(currentReceipt.total)}</span></div>
+              <div className="flex justify-between text-[10px] mb-1"><span>TUNAI</span><span>{formatRupiah(currentReceipt.cash || 0)}</span></div>
+              <div className="flex justify-between text-[10px] font-bold mb-5"><span>KEMBALI</span><span>{formatRupiah(currentReceipt.change || 0)}</span></div>
               <div className="text-center text-[10px]">Terima Kasih</div><div className="text-center text-[10px]">Silakan datang kembali :)</div>
             </div>
           )}
